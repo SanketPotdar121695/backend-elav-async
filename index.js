@@ -13,6 +13,10 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
+app.get('/', (req, res) => {
+  res.status(200).send('<h1>Welcome to the instaMasai fullstack API !!!</h1>');
+});
+
 app.get('/regenerate', regenerate);
 app.use('/users', userRouter);
 app.use('/posts', postRouter);
