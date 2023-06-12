@@ -1,17 +1,19 @@
 const mongoose = require('mongoose');
 
-const postSchema = mongoose.Schema(
+const postSchema = new mongoose.Schema(
   {
-    title: String,
+    title: { type: String, required: true },
     body: String,
     device: {
       type: String,
-      enum: ['PC', 'TABLET', 'MOBILE'],
-      required: true,
+      enum: ['Laptop', 'Tablet', 'Mobile'],
+      required: true
     },
+    no_of_comments: Number,
+    userID: String
   },
   {
-    versionKey: false,
+    versionKey: false
   }
 );
 

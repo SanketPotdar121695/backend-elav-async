@@ -1,37 +1,36 @@
 const jwt = require('jsonwebtoken');
-const { secretKey } = require('../config/db');
-const { PostModel } = require('../models/post.model');
+const { secretKey1 } = require('../config/db');
+const { BlacklistModel } = require('../models/blacklist.model');
 
-const requireAuth = async (req, res, next) => {
-  let token = req.headers.token;
+const auth = async (req, res, next) => {
+  try {
+    let token = req.headers.authorization?.split(' ')[1] || null;
 
-  if (token) {
-    token = token.split(' ')[1];
+    if (token) {
+      let existingToken = await BlacklistModel.find({
+        blacklist: { $in: token }
+      });
 
-    try {
-      let { userID } = jwt.verify(token, secretKey);
-
-      if (req.method === 'POST') {
-        req.body = { ...req.body, authID: userID };
-        next();
-      } else {
-        let { postID } = req.params;
-        let post = await PostModel.findById(postID);
-
-        if (post.authID === userID) next();
-        else
-          res.status(400).send({
-            error: 'Access denied! You are not authorized to make changes.',
-          });
+      if (existingToken.length) {
+        return res.status(400).send({
+          error:
+            'Access denied! You are not logged in to perform this action. Please login again.'
+        });
       }
-      next();
-    } catch (err) {
-      return res.status(400).send({ error: err.message });
+
+      let decoded = jwt.verify(token, secretKey1);
+
+      if (decoded) {
+        req.body.userID = decoded.userID;
+        next();
+      } else
+        return res.status(400).send({
+          error: 'Access denied! You are not allowed to perform this action.'
+        });
     }
-  } else
-    return res
-      .status(400)
-      .send({ error: 'Access denied! You are not logged in.' });
+  } catch (err) {
+    return res.status(400).send({ error: err.message });
+  }
 };
 
-module.exports = { requireAuth };
+module.exports = { auth };

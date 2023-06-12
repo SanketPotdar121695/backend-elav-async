@@ -1,10 +1,18 @@
-require("dotenv").config();
-const mongoose = require("mongoose");
+require('dotenv').config();
+const mongoose = require('mongoose');
 
 const PORT = process.env.PORT;
-const URL = process.env.mongoURL;
-const secretKey = process.env.myPrecious;
+const secretKey1 = process.env.secretKey1;
+const secretKey2 = process.env.secretKey2;
 
-const connection = mongoose.connect(URL);
+const connection = async () => {
+  try {
+    await mongoose.connect(process.env.mongoURL);
+    console.log('Connected to MongoDB');
+  } catch (err) {
+    console.log('Something went wrong!', err.message);
+  }
+  console.log(`App is running on port ${PORT}`);
+};
 
-module.exports = { connection, PORT, secretKey };
+module.exports = { PORT, secretKey1, secretKey2, connection };

@@ -1,76 +1,103 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { secretKey } = require('../config/db');
 const { UserModel } = require('../models/user.model');
+const { auth } = require('../middlewares/auth.middleware');
+const { secretKey1, secretKey2 } = require('../config/db');
+const { BlacklistModel } = require('../models/blacklist.model');
 
-const userRegister = async (req, res) => {
+const signup = async (req, res) => {
   try {
-    let newUser = req.body;
-    let userExists = await UserModel.find({ email: newUser.email });
+    const newUser = req.body;
+    const existingUser = await UserModel.find({ email: newUser.email });
 
-    if (userExists.length) {
+    if (existingUser.length) {
       return res.status(400).send({
         error:
-          'A user already exists with the same email. Please try again with a different email address.',
+          'Registration failed! A user already exists with the email ID. Please try again with different email ID.'
       });
-    } else {
-      if (newUser.password.length >= 8) {
-        bcrypt.hash(newUser.password, 5, async (err, hash) => {
-          try {
-            let user = new UserModel({ ...newUser, password: hash });
-            await user.save();
-
-            return res.status(200).send({
-              message: 'Hurray, you are registered successfully!',
-            });
-          } catch (err) {
-            return res.status(400).send({ error: err.message });
-          }
-        });
-      } else
-        return res.status(400).send({
-          error:
-            'Wrong credentials provided! The password length must be at least 8 characters long.',
-        });
     }
+
+    let hash = bcrypt.hashSync(newUser.password, 5);
+
+    let user = new UserModel({ ...newUser, password: hash });
+    await user.save();
+
+    return res.status(200).send({ message: 'Registration successful!' });
   } catch (err) {
     return res.status(400).send({ error: err.message });
   }
 };
 
-const userLogin = async (req, res) => {
+const login = async (req, res) => {
   try {
-    let { email, password } = req.body;
-    let user = await UserModel.find({ email });
+    const newUser = req.body;
+    const existingUser =
+      (await UserModel.findOne({ email: newUser.email })) || null;
 
-    if (user.length) {
-      bcrypt.compare(password, user[0].password, (err, result) => {
-        if (result) {
-          jwt.sign(
-            { userID: user[0]._id },
-            secretKey,
-            { expiresIn: '1h' },
-            async (err, token) => {
-              try {
-                return res.status(200).send({
-                  message: 'Hurray, You are logged in successfully!',
-                  token,
-                });
-              } catch (err) {
-                return res.status(400).send({ error: err.message });
-              }
-            }
-          );
-        } else
-          return res
-            .status(400)
-            .send({ error: 'Login failed! Password is incorrect.' });
+    if (!existingUser) {
+      return res.status(400).send({
+        error: 'Login failed! Wrong credentials provided. Please try again.'
       });
-    } else
-      return res.status(400).send({ error: 'Wrong credentials provided!' });
+    }
+
+    bcrypt.compare(newUser.password, existingUser.password, (error, result) => {
+      if (result) {
+        let token = jwt.sign({ userID: existingUser._id }, secretKey1, {
+          expiresIn: '1h'
+        });
+
+        let rToken = jwt.sign({ userID: existingUser._id }, secretKey2, {
+          expiresIn: '7d'
+        });
+        return res
+          .status(200)
+          .send({ message: 'Login successful!', token, rToken });
+      }
+      return res.status(400).send({
+        error:
+          'Login failed! Wrong password provided. Please check your password and try again.'
+      });
+    });
   } catch (err) {
     return res.status(400).send({ error: err.message });
   }
 };
 
-module.exports = { userRegister, userLogin };
+const logout = async (req, res) => {
+  try {
+    let token = req.headers.authorization?.split(' ')[1] || null;
+    console.log(token);
+
+    if (token) {
+      await BlacklistModel.updateMany({}, { $push: { blacklist: [token] } });
+      return res.status(200).send('You are logged out successfully!');
+    }
+
+    return res
+      .status(400)
+      .send({ error: 'You are already logged out. Please login again.' });
+  } catch (err) {
+    return res.status(400).send({ error: err.message });
+  }
+};
+
+const regenerate = async (req, res) => {
+  try {
+    let rToken = req.headers.authorization?.split(' ')[1] || null;
+    let decoded = jwt.verify(rToken, secretKey2);
+
+    if (decoded) {
+      let token = jwt.sign({ userID: decoded.userID }, secretKey1, {
+        expiresIn: '1h'
+      });
+      return res
+        .status(200)
+        .send({ message: 'Regeneration successful!', token, rToken });
+    }
+    return res.status(400).send({ error: 'Regeneration failed!' });
+  } catch (err) {
+    res.status(400).send({ error: err.message });
+  }
+};
+
+module.exports = { signup, login, logout, regenerate };
